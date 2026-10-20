@@ -183,11 +183,12 @@ return view.extend({
 		var generalCard = E('div', { 'class': 'smb-card' });
 		generalCard.appendChild(E('div', { 'class': 'smb-card-topbar' }));
 
-		var gHead = E('div', { 'class': 'smb-card-head' }, [
+		/* 默认折叠：通用设置不常用，避免一进页面就占满屏幕 */
+		var gHead = E('div', { 'class': 'smb-card-head collapsed' }, [
 			E('span', { 'class': 'smb-arrow' }, '▼'),
 			_('通用设置（不常用）')
 		]);
-		var gBody = E('div', { 'class': 'smb-card-body' });
+		var gBody = E('div', { 'class': 'smb-card-body', 'style': 'display:none' });
 		gHead.addEventListener('click', function() {
 			gHead.classList.toggle('collapsed');
 			gBody.style.display = gHead.classList.contains('collapsed') ? 'none' : '';
