@@ -553,11 +553,15 @@ return view.extend({
 			table.appendChild(thead);
 
 			var isAuto = (s.auto === '1');
-			var nameCell = E('td', { 'style': 'font-weight:700;white-space:nowrap' }, [
-				s.name || baseName(s.path || ''),
-				isAuto ? E('span', { 'class': 'smb-badge' }, _('U盘自动共享')) : null
-			]);
-			var dirCell = E('td', {}, isAuto && s.device ? [ (s.path || ''), E('span', { 'class': 'smb-badge', 'style': 'background:#F2F4F9;color:#7A81A0;margin-left:6px' }, s.device) ] : (s.path || ''));
+			/* 注意: children 里不能放 null，E() 会把它渲染成 "null" 文本 */
+			var nameKids = [ s.name || baseName(s.path || '') ];
+			if (isAuto)
+				nameKids.push(E('span', { 'class': 'smb-badge' }, _('U盘自动共享')));
+			var nameCell = E('td', { 'style': 'font-weight:700;white-space:nowrap' }, nameKids);
+			var dirKids = [ (s.path || '') ];
+			if (isAuto && s.device)
+				dirKids.push(E('span', { 'class': 'smb-badge', 'style': 'background:#F2F4F9;color:#7A81A0;margin-left:6px' }, s.device));
+			var dirCell = E('td', {}, dirKids);
 
 			table.appendChild(E('tbody', {}, E('tr', {}, [
 				E('td', { 'class': 'smb-idx' }, String(idx + 1)),
