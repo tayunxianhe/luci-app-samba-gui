@@ -247,8 +247,23 @@ return view.extend({
 		if (hasNmbd) {
 			this.generalNetbios = E('input', { 'type': 'checkbox' });
 			gBody.appendChild(this._field(_('禁用 Netbios'),
-				E('label', { 'class': 'smb-chk' }, [this.generalNetbios, _('关闭旧的 NetBIOS 名称广播服务')])));
+				E('div', {}, [
+					E('label', { 'class': 'smb-chk' }, [this.generalNetbios, _('关闭旧的 NetBIOS 名称广播服务')]),
+					E('div', { 'class': 'smb-hint' }, _('Windows 11 已不再用 NetBIOS 广播发现网络设备，请勿勾选，否则老设备也看不到'))
+				])));
 		}
+
+		/* ---- Windows 11 网络发现（wsdd2）---- */
+		gBody.appendChild(this._field(_('Windows 网络发现'),
+			E('div', {}, [
+				E('div', { 'class': 'smb-hint', 'style': 'margin-bottom:6px' },
+					_('Windows 11（24H2 起）不再使用 NetBIOS 广播，改用 WSD 协议发现设备。需安装 wsdd2 才能在「此电脑 → 网络」里看到路由器；否则请直接用 \\\\路由器IP 访问。')),
+				E('button', {
+					'class': 'smb-btn smb-btn-sm',
+					'click': function(ev) { ev.preventDefault(); self._ensureWsdd(); }
+				}, _('检测并启用 wsdd2')),
+				this.wsddStatus = E('div', { 'class': 'smb-hint', 'style': 'margin-top:6px' }, _('状态检测中…'))
+			])));
 		if (hasSamba) {
 			this.generalAdDc = E('input', { 'type': 'checkbox' });
 			gBody.appendChild(this._field(_('禁用 AD 域控制器'),
@@ -364,6 +379,7 @@ return view.extend({
 
 		this._renderShareList();
 		this._loadUsers();
+		this._checkWsdd();
 		return container;
 	},
 
@@ -1195,6 +1211,72 @@ return view.extend({
 			});
 		}).catch(function(err) {
 			window.alert(_('保存失败') + '：' + (err.message || err));
+		});
+	},
+
+	_checkWsdd: function() {
+		var el = this.wsddStatus;
+		if (!el)
+			return;
+		L.resolveDefault(fs.stat('/usr/bin/wsdd2'), null).then(function(st) {
+			if (!st || st.type !== 'file') {
+				el.textContent = '✖ ' + _('未安装 wsdd2：Windows 11 需它才能在「网络」里发现路由器。点击上方按钮按提示安装。');
+				el.style.color = '#d64541';
+				return;
+			}
+			/* 该 LuCI 版本的 fs 无 readdir，用 stat 探测 rc.d 软链（wsdd2 官方 init 为 S99） */
+			var probes = [ 'S99wsdd2', 'S98wsdd2', 'S50wsdd2' ];
+			var idx = 0;
+			var probeNext = function() {
+				if (idx >= probes.length) {
+					el.textContent = '⚠ ' + _('wsdd2 已安装，但未检测到开机自启链接，点击上方按钮即可启用并立即启动。');
+					el.style.color = '#b7791f';
+					return null;
+				}
+				var p = probes[idx++];
+				return L.resolveDefault(fs.stat('/etc/rc.d/' + p), null).then(function(st) {
+					if (st && st.type) {
+						el.textContent = '✔ ' + _('wsdd2 已安装并已设为开机自启。Windows 11「网络」应能看到路由器；看不到请重启电脑，或在「网络发现」设置里点「立即重新扫描」。');
+						el.style.color = '#1f9d55';
+						return null;
+					}
+					return probeNext();
+				});
+			};
+			return probeNext();
+		}).catch(function() {
+			el.textContent = '⚠ ' + _('无法检测 wsdd2 状态（可能缺少执行权限）。');
+			el.style.color = '#b7791f';
+		});
+	},
+
+	_ensureWsdd: function() {
+		var self = this;
+		var el = this.wsddStatus;
+		if (!el)
+			return;
+		el.textContent = _('检测中…');
+		el.style.color = '';
+		/* 1. 是否已安装 wsdd2 */
+		L.resolveDefault(fs.stat('/usr/bin/wsdd2'), null).then(function(st) {
+			if (!st || st.type !== 'file')
+				throw { _wsddMissing: true };
+			/* 2. 启用开机自启（rc.d 软链已存在则忽略失败） */
+			return L.resolveDefault(fs.exec('/etc/init.d/wsdd2', [ 'enable' ]), null)
+				.then(function() {
+					return L.resolveDefault(fs.exec('/etc/init.d/wsdd2', [ 'restart' ]), null);
+				});
+		}).then(function() {
+			el.textContent = '✔ ' + _('wsdd2 已安装并已启动（开机自动运行）。若「网络」里还看不到路由器，请重启一次电脑，或在网络发现设置里点「立即重新扫描」。');
+			el.style.color = '#1f9d55';
+		}).catch(function(err) {
+			if (err && err._wsddMissing) {
+				el.textContent = '✖ ' + _('未检测到 wsdd2。请先执行： opkg update && opkg install wsdd2（安装后回到本页再点一次本按钮）。');
+				el.style.color = '#d64541';
+				return;
+			}
+			el.textContent = '✖ ' + _('启用失败：') + ((err && err.message) || err);
+			el.style.color = '#d64541';
 		});
 	},
 

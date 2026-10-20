@@ -8,6 +8,11 @@
 			"/usr/sbin/smbd -V": [ "exec" ],
 			"/etc/init.d/samba4 reload": [ "exec" ],
 			"/etc/init.d/samba4 restart": [ "exec" ],
+			"/etc/init.d/wsdd2 enable": [ "exec" ],
+			"/etc/init.d/wsdd2 disable": [ "exec" ],
+			"/etc/init.d/wsdd2 restart": [ "exec" ],
+			"/etc/init.d/wsdd2 start": [ "exec" ],
+			"/usr/bin/wsdd2": [ "exec" ],
 			"/bin/mkdir": [ "exec" ],
 			"/usr/libexec/smb-usermgr.sh": [ "exec" ]
 			},
