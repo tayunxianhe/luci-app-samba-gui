@@ -20,9 +20,14 @@
 | 👤 内置用户管理 | 页面上直接添加/删除 Samba 用户、修改密码，每个输入框都有规则说明，失败时给出具体原因 |
 | 💾 自动共享增强 | 开启后**立即扫描**已挂载的U盘并生成共享（原版只在插拔瞬间触发）；只共享外置硬盘，**内置存储不自动共享**，防止误删系统文件 |
 | ⚙️ 完整通用设置 | 保留原版全部选项：监听接口、性能调优、同步 I/O、macOS 兼容、SMBv1 旧协议兼容（老电视/老设备）、Netbios/AD DC/Winbind 开关、smb.conf 模板在线编辑 |
-| 🎨 全新视觉风格 | 靛蓝色卡片式设计，响应式布局，小屏/低分辨率自动出横向滚动条 |
+| 🖥️ Windows 11 网络发现 | 内置 wsdd2 检测/一键启用，修复 Win11 24H2 起「网络」面板看不到路由器的问题 |
+| 🎨 全新视觉风格 |靛蓝色卡片式设计，响应式布局，小屏/低分辨率自动出横向滚动条 |
 
 ## 📸 截图预览
+
+**Windows 网络发现（wsdd2 检测）**
+
+![网络发现](screenshots/wsdd_discovery.png)
 
 **通用设置（含原版全部选项 + 配置模板编辑）**
 
@@ -82,8 +87,8 @@ rm -f /www/luci-static/resources/view/samba4.js.o /tmp/luci-indexcache*
 |---|---|
 | `files/samba4.js` | LuCI 界面视图（核心） |
 | `files/smb-usermgr.sh` | 后端辅助脚本：用户管理（useradd/smbpasswd/pdbedit）+ 自动共享扫描/清理 |
-| `files/acl.json` | rpcd ACL，为界面授权 mkdir / 用户管理脚本 |
-| `install.sh` | 一键安装脚本（自动备份原文件） |
+| `files/acl.json` | rpcd ACL，为界面授权 mkdir / 用户管理脚本 / wsdd2 启停 |
+| `install.sh` | 一键安装脚本（自动备份原文件、自动安装启用 wsdd2） |
 
 ## 🔙 恢复原版
 
@@ -101,6 +106,18 @@ cp /usr/share/rpcd/acl.d/luci-app-samba4.json.bak_时间戳 /usr/share/rpcd/acl.
 - **为什么选「需要账号密码」后别人访问不了？** 请先在「共享用户」中创建账号，那才是共享登录用的账号（与路由器管理密码无关）。系统默认禁止 root 访问共享。
 - **开启自动共享后列表是空的？** 新版本保存时会立即扫描已挂载的存储并生成共享；如果是从旧版本升级，重新保存一次通用设置即可。
 - **内置存储会被共享出去吗？** 不会。自动共享只针对外置设备，防止误删路由器系统文件。
+- **Windows「网络」里看不到路由器？** Win11 24H2 起不再用 NetBIOS 广播发现，改用 WSD 协议。本插件已内置 `wsdd2` 检测与一键启用（通用设置 → Windows 网络发现）。安装脚本也会自动安装并设为开机自启。临时可用 `\\路由器IP` 直接访问，功能完全一样。
+
+## 🖥️ 关于 Windows 11 看不到路由器的原因
+
+Win10 及以前系统靠 **NetBIOS 广播**（UDP 137/138）在「网络」列表里显示设备；**Windows 11 24H2 起微软改用 WSD 协议**，老机制失效——所以能 `\\10.0.0.1` 访问共享，却在网络列表里看不到路由器。这不是 Samba 出故障。
+
+本插件的处理：
+1. `install.sh` 自动 `opkg install wsdd2` 并 `enable`，开机自动运行；
+2. 顺带修复 `smb.conf.template` 中 `netbios name = |NAME|` 后面多出的一个**尾随空格**（会导致 NetBIOS 名异常）；
+3. 界面「通用设置 → Windows 网络发现」可随时检测状态并一键启用。
+
+若装好后仍看不到：重启一次电脑；确认 Windows 防火墙的「网络发现」已开启；或直接在资源管理器地址栏输入 `\\10.0.0.1`。
 
 ## ⚠️ 安全说明
 
@@ -123,7 +140,19 @@ cp /usr/share/rpcd/acl.d/luci-app-samba4.json.bak_时间戳 /usr/share/rpcd/acl.
 - **Built-in user management** — add/remove Samba users and change passwords on the page, with clear validation messages
 - **Enhanced auto-share** — immediately scans mounted USB/HDD drives on save (the stock hotplug script only fires on plug events); internal storage is **never** auto-shared for safety
 - **Full original settings restored** — interfaces, extra tuning, sync I/O, macOS compatibility, legacy SMBv1 protocol, Netbios/AD DC/Winbind toggles, and online smb.conf template editing
+- **Windows 11 network discovery** — built-in wsdd2 detection and one-click enable, fixing the issue where the router is invisible in Explorer's *Network* pane on Win11 24H2+
 - **Modern responsive UI** — indigo card design with horizontal scrolling on narrow screens
+
+## Why can't I see the router in Windows Explorer → Network?
+
+Windows 10 and earlier used **NetBIOS broadcasts** (UDP 137/138) to populate the Network pane. **Windows 11 24H2+ switched to WSD**, which breaks that mechanism — so `\\10.0.0.1` works fine while the router stays invisible in the list. This is not a Samba malfunction.
+
+What this plugin does:
+1. `install.sh` runs `opkg install wsdd2` and enables it at boot;
+2. Fixes a stray **trailing space** after `netbios name = |NAME|` in `smb.conf.template` that corrupted the NetBIOS name;
+3. Adds a *General Settings → Windows Discovery* card to check status and enable it on demand.
+
+If the router still doesn't show up: reboot your PC once, make sure Windows Firewall's *Network Discovery* is on, or just type `\\10.0.0.1` in Explorer — same thing.
 
 ## Requirements
 
